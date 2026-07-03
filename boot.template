@@ -1,0 +1,32 @@
+# To recompile run this script or with:
+# mkimage -C none -A arm -T script -d boot.cmd boot.scr
+
+setenv ramdisk #INITRAMDISK#
+setenv kernel  #KERNEL#
+
+if test ${devtype} != "usb"; then usb stop; sleep 1; fi
+test "${loading_mmc}" = "" && setenv loading_mmc ${devnum}:${distro_bootpart}
+
+if test -n "${rootpath}"; then
+  nfs ${ramdisk_addr_r} ${rootpath}${ramdisk}
+  nfs ${kernel_addr_r} ${rootpath}${kernel}
+  nfs ${fdt_addr_r} ${rootpath}${fdtfile}
+  ramdisk_size=3000000
+  bootdev=${rootpath}
+  setenv rootpath
+else
+  loaddev="${devtype} ${devnum}:${distro_bootpart}"
+  load ${loaddev} ${ramdisk_addr_r} ${prefix}/${ramdisk} || load ${loaddev} ${ramdisk_addr_r} ${prefix}/${ramdisk}
+  load ${loaddev} ${kernel_addr_r} ${prefix}/${kernel} || load ${loaddev} ${kernel_addr_r} ${prefix}/${kernel}
+  load ${loaddev} ${fdt_addr_r} ${prefix}/${fdtfile} || load ${loaddev} ${fdt_addr_r} ${prefix}/${fdtfile}
+  setenv ramdisk_size 3000000
+  bootdev=${devtype},${devnum},${distro_bootpart}
+fi
+fdt addr ${fdt_addr_r}
+fdt resize
+
+if test -n "${console}"; then setenv argconsole console=${console},${baudrate}; fi
+setenv bootargs root=/dev/ram0 ${argconsole} ${extra} bootdev=${bootdev}
+bootcount reset
+
+booti ${kernel_addr_r} ${ramdisk_addr_r}:${ramdisk_size} ${fdt_addr_r}

@@ -1,0 +1,11 @@
+webapp/node_modules/
+webapp/package-lock.json
+webapp/*.swu
+webapp/dist/
+webapp/webapp.tar.gz
+build/
+uboot-initial.env
+uboot.env
+boot.cmd
+boot.scr
+debian/changelog

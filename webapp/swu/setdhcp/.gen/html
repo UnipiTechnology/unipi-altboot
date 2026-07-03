@@ -1,0 +1,2 @@
+<button class="btn" value="#SWUNAME#"  data-toggle="modal" data-target="#confirm-change">Set DHCP on eth0</button>
+

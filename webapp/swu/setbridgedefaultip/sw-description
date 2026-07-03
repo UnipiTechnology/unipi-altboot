@@ -1,0 +1,14 @@
+software =
+{
+	version = "0.1.0";
+	description = "Change eth0 settings to bridge with a static IP";
+
+        hardware-compatibility: [ "1.0", "2.0"];
+
+	scripts:  (
+		{
+			filename = "defaultip-bridge.sh";
+			type = "preinstall";
+		}
+	);
+}

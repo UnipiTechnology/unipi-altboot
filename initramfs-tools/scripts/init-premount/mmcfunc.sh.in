@@ -1,0 +1,29 @@
+
+# check mmc gp and set password
+
+read_emmc_gp()
+{
+    if [ -b "${rootdev}gp0" ]; then
+        # verify content of block
+        mkdir -p /tmp/_gp0_
+        if mount "${rootdev}gp0" /tmp/_gp0_; then
+            pwdfile=PWD_HASH_USER
+            if ! [ -f "/tmp/_gp0_/$pwdfile" ]; then
+                pwdfile=PWD_HASH_FACTORY
+            fi
+            if [ -f "/tmp/_gp0_/$pwdfile" ]; then
+                sed '/^root:/d' -i /etc/passwd 2>/dev/null || true
+                echo "root:$(cat /tmp/_gp0_/$pwdfile):0:0::/:/bin/sh" >> /etc/passwd
+                sed '/^unipi:/d' -i /etc/passwd || true
+                echo "unipi:$(cat /tmp/_gp0_/$pwdfile):0:0::/:/bin/sh" >> /etc/passwd
+                umount /tmp/_gp0_
+                rmdir /tmp/_gp0_
+                return 0
+            fi
+            umount /tmp/_gp0_
+        fi
+        rmdir /tmp/_gp0_
+    fi
+
+    return 1
+}

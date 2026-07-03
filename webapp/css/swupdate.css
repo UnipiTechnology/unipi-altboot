@@ -1,0 +1,35 @@
+/*!
+ * Copyright (C) 2017-2018 Weidmüller Interface GmbH & Co. KG
+ * Stefan Herbrechtsmeier <stefan.herbrechtsmeier@weidmueller.com>
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+body {
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.dropzone {
+  background: #ffffff;
+  background: rgba(255,255,255,0.75);
+  min-height: 200px;
+}
+
+.dropzone .dz-preview .dz-image {
+  width: 220px;
+}
+
+.btn { 
+  border: 2px solid rgba(0,0,0,0.1); 
+} 
+
+[data-toggle="collapse"] i:before {
+  content: "\f139";
+}
+
+[data-toggle="collapse"].collapsed i:before {
+  content: "\f13a";
+}

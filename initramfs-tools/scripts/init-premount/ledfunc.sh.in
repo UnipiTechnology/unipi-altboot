@@ -1,0 +1,132 @@
+# shell include file
+
+_sysled_on()
+{
+    if [ -d "/sys/class/leds/$1" ]; then
+        echo none > "/sys/class/leds/$1/trigger"
+        echo -n 255 > "/sys/class/leds/$1/brightness"
+    fi
+}
+
+_sysled_off()
+{
+    if [ -d "/sys/class/leds/$1" ]; then
+        echo none > "/sys/class/leds/$1/trigger"
+        echo -n 0 > "/sys/class/leds/$1/brightness"
+    fi
+}
+
+_sysled_timer()
+{
+    ## _sysled_timer unipi-sysled-xhr 80 80
+    if [ -d "/sys/class/leds/$1" ]; then
+        echo none > "/sys/class/leds/$1/trigger"
+        sleep 0.5
+        echo timer > "/sys/class/leds/$1/trigger"
+        echo "$2" > "/sys/class/leds/$1/delay_on"
+        echo "$3" > "/sys/class/leds/$1/delay_off"
+    fi
+}
+
+_sysled_multi_timer()
+{
+    _sysled_off unipi-sysled-xh
+    _sysled_off unipi-sysled-x2
+    _sysled_off unipi-sysled-x3
+    _sysled_off unipi-sysled-x4
+    _sysled_off unipi-sysled-x5
+    if [ -d /sys/class/leds/unipi-sysled-xh ]; then
+        sleep 1
+        echo timer | tee /sys/class/leds/unipi-sysled-xh/trigger \
+                   | tee /sys/class/leds/unipi-sysled-x2/trigger \
+                   | tee /sys/class/leds/unipi-sysled-x3/trigger \
+                   | tee /sys/class/leds/unipi-sysled-x4/trigger \
+                   > /sys/class/leds/unipi-sysled-x5/trigger
+        echo "$1" | tee /sys/class/leds/unipi-sysled-xh/delay_on \
+                 | tee /sys/class/leds/unipi-sysled-x2/delay_on \
+                 | tee /sys/class/leds/unipi-sysled-x3/delay_on \
+                 | tee /sys/class/leds/unipi-sysled-x4/delay_on \
+                 > /sys/class/leds/unipi-sysled-x5/delay_on
+
+        echo "$2" | tee /sys/class/leds/unipi-sysled-xh/delay_off \
+                 | tee /sys/class/leds/unipi-sysled-x2/delay_off \
+                 | tee /sys/class/leds/unipi-sysled-x3/delay_off \
+                 | tee /sys/class/leds/unipi-sysled-x4/delay_off \
+                 > /sys/class/leds/unipi-sysled-x5/delay_off
+    fi
+}
+
+edge_led()
+{
+    if [ "$IS_RPI" ]; then
+        code=$(printf "%02x" "$1")
+        i2cset -y 1 0x1f 0xE0 "0x${code}" 2>/dev/null || true
+    fi
+    
+}
+
+iogroup_led()
+{
+    if [ -f /sys/bus/iogroup/devices/iogroup1/sysled_mode ]; then
+        echo "$1" > /sys/bus/iogroup/devices/iogroup1/sysled_mode
+    fi
+}
+
+# used in case of USB backup restoration
+setled_deploy_mode()
+{
+    edge_led 2
+    iogroup_led 2
+
+    _sysled_timer unipi-sysled-xhb 80 80
+    _sysled_multi_timer 80 80
+}
+
+#Used in case of SERVICE mode
+setled_web_mode()
+{
+    edge_led 1
+    iogroup_led 1
+
+    _sysled_timer unipi-sysled-xhb 600 600
+    _sysled_multi_timer 600 600
+}
+
+setled_reboot_mode()
+{
+    edge_led 0
+    iogroup_led 0
+
+    _sysled_off unipi-sysled-xh
+    _sysled_off unipi-sysled-x2
+    _sysled_off unipi-sysled-x3
+    _sysled_off unipi-sysled-x4
+    _sysled_off unipi-sysled-x5
+}
+
+setled_error()
+{
+    edge_led 5
+    iogroup_led 5
+
+    _sysled_on unipi-sysled-xh
+    _sysled_on unipi-sysled-x2
+    _sysled_on unipi-sysled-x3
+    _sysled_on unipi-sysled-x4
+    _sysled_on unipi-sysled-x5
+
+    _sysled_off unipi-sysled-xhb
+    _sysled_timer unipi-sysled-xhr 80 80
+}
+
+setled_ok()
+{
+    _sysled_on "nanopi\:green\:pwr"
+    _sysled_on "nanopi\:blue\:status"
+
+    _sysled_on unipi-sysled-xh
+    _sysled_on unipi-sysled-xhb
+
+    iogroup_led 0
+    edge_led 0
+}

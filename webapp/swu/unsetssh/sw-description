@@ -1,0 +1,14 @@
+software =
+{
+        version = "0.1.0";
+        description = "Disable ssh";
+
+        hardware-compatibility: [ "1.0", "2.0"];
+
+	scripts:  (
+		{
+				filename = "disable-ssh.sh";
+				type = "preinstall";
+		}
+	);
+}

@@ -1,0 +1,341 @@
+diff --git a/core/installer.c b/core/installer.c
+index 29d5ed83..ba55a950 100644
+--- a/core/installer.c
++++ b/core/installer.c
+@@ -82,7 +82,7 @@ swupdate_file_t check_if_required(struct imglist *list, struct filehdr *pfdh,
+ 				return -EINVAL;
+ 			}
+ 
+-			if (img->install_directly) {
++			if (img->install_directly && (!img->is_script)) {
+ 				skip = INSTALL_FROM_STREAM;
+ 				install_direct++;
+ 			}
+@@ -218,6 +218,76 @@ static int generate_swversions(struct swupdate_cfg *cfg)
+ 	return 0;
+ }
+ 
++/*
++ * Extract one scripts from a list from the image
++ * and save them on the filesystem to be executed later
++ */
++int extract_script(struct img_type *script)
++{
++	int fdout;
++	int ret = 0;
++	const char* tmpdir_scripts = get_tmpdirscripts();
++
++	if (!script->fname[0] && (script->provided == 0)) {
++		TRACE("No script provided for script of type %s", script->type);
++		return 0;
++	}
++	if (script->provided == 0) {
++		ERROR("Required script %s not found in image", script->fname);
++		return -1;
++	}
++
++	snprintf(script->extract_file, sizeof(script->extract_file), "%s%s",
++	        tmpdir_scripts , script->fname);
++
++	fdout = openfileoutput(script->extract_file);
++	if (fdout < 0)
++		return fdout;
++
++	int fdin;
++	char *tmpfile;
++	unsigned long offset = 0;
++	uint32_t checksum;
++
++	if (asprintf(&tmpfile, "%s%s", get_tmpdir(), script->fname) ==
++	               ENOMEM_ASPRINTF) {
++	               ERROR("Path too long: %s%s", get_tmpdir(), script->fname);
++	               close(fdout);
++	               return -ENOMEM;
++	}
++
++	fdin = open(tmpfile, O_RDONLY);
++	free(tmpfile);
++	if (fdin < 0) {
++	       ERROR("Extracted script not found in %s: %s %d",
++	               get_tmpdir(), script->extract_file, errno);
++		close(fdout);
++		return -ENOENT;
++	}
++
++	struct swupdate_copy copy = {
++		.fdin = fdin,
++		.out = &fdout,
++		.nbytes = script->size,
++		.offs = &offset,
++		.compressed = script->compressed,
++		.checksum = &checksum,
++		.hash = script->sha256,
++		.encrypted = script->is_encrypted,
++		.imgivt = script->ivt_ascii,
++		.imgaes = script->aes_ascii,
++		.cipher = script->cipher,
++	};
++	ret = copyfile(&copy);
++	close(fdin);
++	close(fdout);
++
++	if (ret < 0)
++		return ret;
++
++	return 0;
++}
++
+ static int update_bootloader_env(struct swupdate_cfg *cfg, const char *script)
+ {
+ 	int ret = 0;
+diff --git a/core/pctl.c b/core/pctl.c
+index 8d2b291e..cdda5aa1 100644
+--- a/core/pctl.c
++++ b/core/pctl.c
+@@ -262,7 +262,7 @@ static int __run_cmd(const char *cmd, bgtask *fn, int *fdin)
+ 	int ret = 0;
+ 	int const npipes = 4;
+ 	int pipes[npipes][2];
+-	LOGLEVEL levels[4] = { TRACELEVEL, ERRORLEVEL, INFOLEVEL, WARNLEVEL };
++	LOGLEVEL levels[4] = { INFOLEVEL, ERRORLEVEL, INFOLEVEL, WARNLEVEL };
+ 	pid_t process_id;
+ 	int const PIPE_READ = 0;
+ 	int const PIPE_WRITE = 1;
+diff --git a/core/stream_interface.c b/core/stream_interface.c
+index 85d13fda..18a533af 100644
+--- a/core/stream_interface.c
++++ b/core/stream_interface.c
+@@ -185,6 +185,8 @@ static int extract_files(int fd, struct swupdate_cfg *software)
+ 	const char* TMPDIR = get_tmpdir();
+ 	bool installed_directly = false;
+ 	bool encrypted_sw_desc = false;
++	struct installer_handler *hnd;
++	script_fn scr_type = PREINSTALL;
+ 
+ #ifdef CONFIG_ENCRYPTED_SW_DESCRIPTION
+ 	encrypted_sw_desc = true;
+@@ -299,6 +301,24 @@ static int extract_files(int fd, struct swupdate_cfg *software)
+ 					return -1;
+ 				}
+ 				close(fdout);
++
++				if (img->install_directly && (img->is_script)) {
++					if (!software->parms.dry_run) {
++						hnd = find_handler(img);
++						if (hnd) {
++							if (extract_script(img)) {
++								ERROR("copying preinstall scripts failed");
++								return -1;
++							}
++							if (hnd->installer(img, &scr_type)) {
++								ERROR("copying preinstall scripts failed");
++								return -1;
++							}
++							/* don't  run again in future */
++							img->is_script = 0;
++						}
++					}
++				}
+ 				break;
+ 
+ 			case SKIP_FILE:
+@@ -615,8 +635,8 @@ void *network_initializer(void *data)
+ 		stream_wkup = false;
+ 		inst.status = RUN;
+ 		pthread_mutex_unlock(&stream_mutex);
+-		notify(START, RECOVERY_NO_ERROR, INFOLEVEL, "Software Update started !");
+-		TRACE("Software update started");
++		notify(START, RECOVERY_NO_ERROR, INFOLEVEL, "Operation started !");
++		TRACE("Operation started");
+ 
+ 		/* Create directories for scripts/datadst */
+ 		swupdate_create_directory(SCRIPTS_DIR_SUFFIX);
+@@ -734,7 +754,7 @@ void *network_initializer(void *data)
+ 			 */
+ 			update_transaction_state(software, STATE_IN_PROGRESS);
+ 
+-			notify(RUN, RECOVERY_NO_ERROR, INFOLEVEL, "Installation in progress");
++			notify(RUN, RECOVERY_NO_ERROR, INFOLEVEL, "Operation in progress");
+ 
+ 			/*
+ 			 * if this update is signalled to be without reboot (On the Fly),
+@@ -752,7 +772,7 @@ void *network_initializer(void *data)
+ 			ret = install_images(software);
+ 			if (ret != 0) {
+ 				update_transaction_state(software, STATE_FAILED);
+-				notify(FAILURE, RECOVERY_ERROR, ERRORLEVEL, "Installation failed !");
++				notify(FAILURE, RECOVERY_ERROR, ERRORLEVEL, "Operation failed !");
+ 				inst.last_install = FAILURE;
+ 
+ 				/*
+@@ -774,10 +794,10 @@ void *network_initializer(void *data)
+ 				 */
+ 				if (!update_transaction_state(software, STATE_INSTALLED)) {
+ 					ERROR("Cannot persistently store INSTALLED update state.");
+-					notify(FAILURE, RECOVERY_ERROR, ERRORLEVEL, "Installation failed !");
++					notify(FAILURE, RECOVERY_ERROR, ERRORLEVEL, "Operation failed !");
+ 					inst.last_install = FAILURE;
+ 				} else {
+-					notify(SUCCESS, RECOVERY_NO_ERROR, INFOLEVEL, "SWUPDATE successful !");
++					notify(SUCCESS, RECOVERY_NO_ERROR, INFOLEVEL, "Operation successful !");
+ 					inst.last_install = SUCCESS;
+ 				}
+ 			}
+diff --git a/core/util.c b/core/util.c
+index 2534da31..fc1bb2be 100644
+--- a/core/util.c
++++ b/core/util.c
+@@ -684,10 +684,22 @@ bool strtobool(const char *s)
+ 	return false;
+ }
+ 
++#define MAXFSTYPE 20
+ int swupdate_mount(const char *device, const char *dir, const char *fstype)
+ {
++
++	int pos;
++	char fstype_c[MAXFSTYPE+1];
++	char *opt = index(fstype, ',');
++	if (opt != NULL) {
++		pos = opt - fstype;
++	        if (pos > MAXFSTYPE) pos = MAXFSTYPE;
++		fstype = strncpy(fstype_c, fstype, pos);
++		fstype_c[pos] = '\0';
++		opt++;
++	}
+ #if defined(__linux__)
+-	return mount(device, dir, fstype, 0, NULL);
++	return mount(device, dir, fstype, 0, opt);
+ #elif defined(__FreeBSD__)
+ 	int iovlen = 8;
+ 	struct iovec iov[iovlen];
+diff --git a/include/installer.h b/include/installer.h
+index 21b3d9f6..ca7e4c8f 100644
+--- a/include/installer.h
++++ b/include/installer.h
+@@ -23,5 +23,6 @@ int postupdate(struct swupdate_cfg *swcfg, const char *info);
+ int preupdatecmd(struct swupdate_cfg *swcfg);
+ int run_prepost_scripts(struct imglist *list, script_fn type);
+ void cleanup_files(struct swupdate_cfg *software);
++int extract_script(struct img_type *script);
+ int update_installed_image_version(struct swver *sw_ver_list,
+ 		struct img_type *img);
+diff --git a/mongoose/Makefile b/mongoose/Makefile
+index 691b29c4..27ce93eb 100644
+--- a/mongoose/Makefile
++++ b/mongoose/Makefile
+@@ -9,7 +9,7 @@ KBUILD_CFLAGS += -DMG_ENABLE_EPOLL=1
+ KBUILD_CFLAGS += -DMG_ENABLE_POSIX_FS=1
+ KBUILD_CFLAGS += -DMG_ENABLE_LOG=0
+ KBUILD_CFLAGS += -DMG_ENABLE_MD5=1
+-KBUILD_CFLAGS += -DMG_MAX_RECV_SIZE=262144
++KBUILD_CFLAGS += -DMG_MAX_RECV_SIZE=8388608
+ ifneq ($(CONFIG_MONGOOSEIPV6),)
+ KBUILD_CFLAGS += -DMG_ENABLE_IPV6=1
+ endif
+diff --git a/mongoose/mongoose_interface.c b/mongoose/mongoose_interface.c
+index 729862e6..a53a8b3c 100644
+--- a/mongoose/mongoose_interface.c
++++ b/mongoose/mongoose_interface.c
+@@ -363,6 +363,70 @@ static void restart_handler(struct mg_connection *nc, void *ev_data)
+ 	mg_http_reply(nc, 201, "", "%s", "Device will reboot now.\n");
+ }
+ 
++static void updatesettings_handler(struct mg_connection *nc, void *ev_data)
++{
++	struct mg_http_message *hm = (struct mg_http_message *) ev_data;
++//	ipc_message msg = {};
++
++	if(mg_strcasecmp(hm->method, mg_str("POST")) != 0) {
++		mg_http_reply(nc, 405, "", "%s", "Method Not Allowed\n");
++		return;
++	}
++
++	struct mg_str *xfilename;
++
++	//struct mg_str *data;
++	//size_t length;
++	char buf[1024];
++	int fd, fdinp, read_len;
++
++	xfilename = mg_http_get_header(hm, "FILENAME");
++	if (xfilename == NULL || xfilename->len > 32) {
++		TRACE("Invalid FILENAME");
++		mg_http_reply(nc, 403, "", "%s", "Invalid file");
++	return;
++	}
++
++	memcpy(buf, xfilename->buf, xfilename->len);
++	buf[xfilename->len] = '\0';
++	strcat(buf,".swu");
++
++	fdinp = open(buf, O_RDONLY);
++	if (fdinp < 0) {
++		TRACE("Required file %s not found", buf);
++		mg_http_reply(nc, 500, "", "%s", "Update file not found");
++		return;
++	}
++
++	struct swupdate_request req;
++	swupdate_prepare_req(&req);
++	req.len = strlen(buf);
++	strncpy(req.info, buf, sizeof(req.info) - 1);
++	req.source = SOURCE_LOCAL;
++	fd = ipc_inst_start_ext(&req, sizeof(req));
++	do {
++		read_len = read(fdinp, buf, sizeof(buf));
++		if (read_len < 0) {
++			close(fdinp);
++			ipc_end(fd);
++			mg_http_reply(nc, 500, "", "%s", "Couldn't read file");
++			return;
++		}
++		if (read_len>0)
++			ipc_send_data(fd, buf, read_len);
++	} while (read_len==sizeof(buf));
++	ipc_end(fd);
++
++	mg_http_reply(nc, 200, "", "Ok, %s\r\n", xfilename->buf);
++	/*mg_send_response_line(nc, 200,
++	    "Content-Type: text/plain\r\n"
++	    "Connection: close");
++	mg_send(nc, "\r\n", 2);
++	mg_printf(nc, "Ok, %.*s.\r\n", (int) xfilename->len, xfilename->buf);
++	nc->flags |= MG_F_SEND_AND_CLOSE;*/
++}
++
++
+ static int level_to_rfc_5424(int level)
+ {
+ 	switch(level) {
+@@ -692,6 +756,8 @@ static void ev_handler(struct mg_connection *nc, int ev, void *ev_data)
+ 			websocket_handler(nc, ev_data);
+ 		else if (mg_match(hm->uri, mg_str("#/restart"), NULL))
+ 			restart_handler(nc, ev_data);
++		else if (mg_match(hm->uri, mg_str("#/updatesettings"), NULL))
++			updatesettings_handler(nc, ev_data);
+ 	        else if (mg_match(hm->uri, mg_str("#/upload"), NULL)) {
+ 			nc->pfn = upload_handler;
+ 			nc->pfn_data = NULL;
+diff --git a/parser/parser.c b/parser/parser.c
+index 84bf036c..6ce293bf 100644
+--- a/parser/parser.c
++++ b/parser/parser.c
+@@ -302,8 +302,15 @@ static int parse_hw_compatibility(parsertype p, void *cfg, struct swupdate_cfg *
+ 
+ 	setting = find_node(p, cfg, "hardware-compatibility", swcfg);
+ 	if (setting == NULL) {
+-		ERROR("HW compatibility not found");
+-		return -1;
++		hwrev = (struct hw_type *)calloc(1, sizeof(struct hw_type));
++		if (!hwrev) {
++			ERROR("No memory: malloc failed");
++			return -1;
++		}
++		strlcpy(hwrev->revision, "1.0", sizeof(hwrev->revision));
++		LIST_INSERT_HEAD(&swcfg->hardware, hwrev, next);
++
++		return 0;
+ 	}
+ 
+ 	count = get_array_length(p, setting);

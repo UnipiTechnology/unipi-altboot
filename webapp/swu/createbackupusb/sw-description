@@ -1,0 +1,26 @@
+software =
+{
+        version = "0.1.0";
+        description = "Create backup of system MMC and save it to USB drive";
+
+        hardware-compatibility: [ "1.0", "2.0"];
+
+	scripts:  (
+		{
+				filename = "mount-usb.sh";
+				type = "preinstall";
+		}
+        ,
+		{
+				filename = "backup.sh";
+				type = "postinstall";
+		}
+	);
+
+	files: (
+		{
+				filename = "README.txt";
+				path = "/tmp/__usb/README.txt";
+		}
+	);
+}

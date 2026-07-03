@@ -1,0 +1,14 @@
+software =
+{
+	version = "0.1.0";
+	description = "Change eth0 settings to DHCP";
+
+        hardware-compatibility: [ "1.0", "2.0"];
+
+	scripts:  (
+		{
+			filename = "dhcp-net.sh";
+			type = "preinstall";
+		}
+	);
+}

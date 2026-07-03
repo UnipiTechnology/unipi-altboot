@@ -1,0 +1,132 @@
+
+# Prepare this variables and create /dev/rootdev /dev/root0part /dev/boot0part
+#
+# bool: IS_AXON IS_ZULU IS_G1 IS_RPI
+# bool: HAS_ETH0 HAS_ETH1
+# bool: HAS_EVOK HAS_MERVIS
+# [fat,ext4,btrfs]: ROOTFS BOOTFS
+
+
+##########################################################
+# use hwrevision from device tree if prepared by U-boot
+
+if [ -r /sys/firmware/devicetree/base/altboot-hwrevision ]; then
+    cat /sys/firmware/devicetree/base/altboot-hwrevision > /etc/hwrevision
+fi
+
+##########################################################
+## find hw platform 
+#
+HWPROC=$(grep '^Hardware' /proc/cpuinfo | sed 's/^.*: //')
+
+test "${HWPROC}" = "Allwinnersun50iw2Family" && export IS_AXON=1
+test "${HWPROC}" = "Rockchip RK3328"         && export IS_G1=1
+test "${HWPROC}" = "BCM2835"                 && export IS_RPI=1
+if [ -z "$HWPROC" ]; then
+    if [ -r /proc/device-tree/compatible ] && grep -q bcm2711 /proc/device-tree/compatible; then
+        export IS_RPI=1
+        export IS_CM40=1
+    elif [ -r /sys/devices/soc0/soc_id ] && grep -q "i.MX8MM" /sys/devices/soc0/soc_id; then
+        export IS_ZULU=1
+    fi
+fi
+
+[ "${IS_AXON}" = "1" ] && rootdev=/dev/disk/by-path/platform-1c11000.mmc
+[ "${IS_ZULU}" = "1" ]  && rootdev=/dev/disk/by-path/platform-30b60000.mmc
+if [ "${IS_G1}" = "1" ]; then
+    if [ -e "/dev/disk/by-path/platform-ff520000.dwmmc" ]; then
+        rootdev=/dev/disk/by-path/platform-ff520000.dwmmc
+    else
+        rootdev=/dev/disk/by-path/platform-ff520000.mmc
+    fi
+fi
+[ "${IS_RPI}" = "1" ]  && rootdev=/dev/disk/by-path/platform-fe340000.mmc
+
+##########################################################
+# There could be incorrectly prepared symlink 
+#              /dev/disk/by-path/xxx --> /dev/mmcblk1boot0
+# instead of
+#              /dev/disk/by-path/xxx --> /dev/mmcblk1
+repair_symlink()
+{
+    if [ -L "$1" ]; then
+		a=$(readlink "$1" | sed 's/^\(.*mmcblk[[:digit:]]\+\).*$/\1/')
+		rm "$1"
+		ln -s "$a" "$1"
+	fi
+}
+
+create_root_dev()
+{
+    devname=$1
+    blockdev=$2
+    if [ -b "${blockdev}" ]; then
+        [ -e "${devname}" ] && rm -f "${devname}"
+        ln -s "${blockdev}" "${devname}"
+    fi
+}
+
+## find root partition and filesystem 
+
+repair_symlink "${rootdev}"
+
+if [ -L "${rootdev}" ]; then
+    rootdev=$(readlink -f "${rootdev}")
+fi
+if [ -b "${rootdev}" ]; then
+    boot0part=$(fdisk -o Device,Attrs -l "$rootdev" | awk '/LegacyBIOSBootable/ || ($2=="80") {print $1;}')
+    if [ -z "$boot0part" ]; then 
+        boot0part=${rootdev}p1
+    fi
+    if [ -b "${boot0part}" ]; then
+        BOOTFS=$(blkid -p -o export "${boot0part}" | grep '^TYPE=' | sed 's/^TYPE=//')
+        if [ "${BOOTFS}" != "btrfs" ]; then
+            mntdir=/tmp/__mnt__
+            mkdir -p "${mntdir}"
+            if mount "$boot0part" "${mntdir}" && [ -f "${mntdir}/boot/boot.scr" ] ; then
+                root0part="${boot0part}"
+            else
+                root0part=${rootdev}p2
+            fi
+            umount "${mntdir}" 2>/dev/null || true
+            if [ -b "${root0part}" ]; then
+                ROOTFS=$(blkid -p -o export "${root0part}" | grep '^TYPE=' | sed 's/^TYPE=//')
+            fi
+        fi
+        if [ -z "${ROOTFS}" ]; then
+            root0part=${boot0part}
+            ROOTFS="${BOOTFS}"
+        fi
+    fi
+fi
+
+if [ -n "$ROOTFS" ]; then
+    create_root_dev /dev/rootdev  "${rootdev}"
+    create_root_dev /dev/root0part "${root0part}"
+    create_root_dev /dev/boot0part "${boot0part}"
+    # !!!! THIS IS ONLY HOTFIX TO BE COMPATIBLE WITH OLD IMAGES (with /dev/rootpart in sw-description)
+    # Don't expect correct symlink of /dev/rootpart in scripts
+    create_root_dev /dev/rootpart "${boot0part}"
+fi
+
+# try to mount rootpartition
+if [ -n "$ROOTFS" ]; then
+    mntdir=/tmp/__mnt__
+    mkdir -p "${mntdir}"
+    if mount "$root0part" "${mntdir}"; then
+       rootdir="${mntdir}"
+       [ "${ROOTFS}" = "btrfs" ] && [ -d "${mntdir}/rootfs" ] && rootdir="${mntdir}/rootfs"
+       # check misc files
+       [ -d $rootdir/etc ] && export HAS_ETC=1
+       [ -e $rootdir/lib/systemd/system/mervisrt.service ] && export HAS_MERVIS=1
+       [ -e $rootdir/lib/systemd/system/evok.service ] && export HAS_EVOK=1
+       [ -e $rootdir/lib/systemd/system/ssh.service ] && export HAS_SSH=1
+
+       umount "${mntdir}"
+       rmdir "${mntdir}"
+    fi
+fi
+
+#check ethernets
+ip li ls eth0 2>/dev/null >&2  && export HAS_ETH0=1
+ip li ls eth1 2>/dev/null >&2  && export HAS_ETH1=1

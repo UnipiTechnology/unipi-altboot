@@ -1,0 +1,34 @@
+# List of modules that you want to include in your initramfs.
+# They will be loaded at boot time in the order below.
+#
+# Syntax:  module_name [args ...]
+#
+# You must run update-initramfs(8) to effect this change.
+#
+# Examples:
+#
+# raid1
+# sd_mod
+bridge
+nf_tables
+nfnetlink
+ip_tables
+x_tables
+spi_imx
+spi_nor
+imx_sdma
+i2c-dev
+
+unipi
+unipi_mfd
+
+usb_storage
+exfat
+
+nft_redir
+nft_chain_nat
+nft_nat
+nf_nat
+nf_conntrack
+nf_defrag_ipv6
+nf_defrag_ipv4

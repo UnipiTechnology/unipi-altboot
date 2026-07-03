@@ -1,0 +1,14 @@
+software =
+{
+        version = "0.1.0";
+        description = "Enable ssh";
+
+        hardware-compatibility: [ "1.0", "2.0"];
+
+	scripts:  (
+		{
+				filename = "enable-ssh.sh";
+				type = "preinstall";
+		}
+	);
+}

@@ -1,0 +1,24 @@
+Build should be done on final platform with Unipi Base OS installed.
+Mkinitramfs tool is used to creat initramdisc during build process.
+
+ttyd requires
+---------------------
+BIN: apt-get install libwebsockets8 libjson-c3
+DEV: apt-get install cmake g++ pkg-config libwebsockets-dev libjson-c-dev libssl-dev xxd 
+
+swupdate requires
+---------------------
+BIN: apt-get install libjson-c3 libarchive13 libconfig9 libnl-3-200 libnl-genl-3-200 libnl-route-3-200
+DEV: apt-get install libcurl4-gnutls-dev libconfig-dev libarchive-dev
+
+webapp
+---------------------
+apt-get install -y curl cpio
+curl -sL https://deb.nodesource.com/setup_10.x | sudo -E bash -
+apt-get install -y nodejs
+# 			toto asi neni nutne: npm install -g gulp
+## cd webapp
+## npm install
+## npm run build
+## npm run package -- --output swupdate-www.tar.gz
+#

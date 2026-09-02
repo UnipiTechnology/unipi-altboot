@@ -1,5 +1,21 @@
+From 05c81004ee2c9d6b9b9bd11fd3582f2babf89e17 Mon Sep 17 00:00:00 2001
+From: Miroslav Ondra <ondra@faster.cz>
+Date: Thu, 27 Aug 2026 11:07:57 +0200
+Subject: [1/2] Add script extraction support
+
+---
+ core/installer.c              | 72 ++++++++++++++++++++++++++++++++++-
+ core/pctl.c                   |  2 +-
+ core/stream_interface.c       | 32 +++++++++++++---
+ core/util.c                   | 14 ++++++-
+ include/installer.h           |  1 +
+ mongoose/Makefile             |  2 +-
+ mongoose/mongoose_interface.c | 66 ++++++++++++++++++++++++++++++++
+ parser/parser.c               | 11 +++++-
+ 8 files changed, 188 insertions(+), 12 deletions(-)
+
 diff --git a/core/installer.c b/core/installer.c
-index 29d5ed83..ba55a950 100644
+index 29d5ed8..ba55a95 100644
 --- a/core/installer.c
 +++ b/core/installer.c
 @@ -82,7 +82,7 @@ swupdate_file_t check_if_required(struct imglist *list, struct filehdr *pfdh,
@@ -89,7 +105,7 @@ index 29d5ed83..ba55a950 100644
  {
  	int ret = 0;
 diff --git a/core/pctl.c b/core/pctl.c
-index 8d2b291e..cdda5aa1 100644
+index 8d2b291..cdda5aa 100644
 --- a/core/pctl.c
 +++ b/core/pctl.c
 @@ -262,7 +262,7 @@ static int __run_cmd(const char *cmd, bgtask *fn, int *fdin)
@@ -102,7 +118,7 @@ index 8d2b291e..cdda5aa1 100644
  	int const PIPE_READ = 0;
  	int const PIPE_WRITE = 1;
 diff --git a/core/stream_interface.c b/core/stream_interface.c
-index 85d13fda..18a533af 100644
+index 85d13fd..18a533a 100644
 --- a/core/stream_interface.c
 +++ b/core/stream_interface.c
 @@ -185,6 +185,8 @@ static int extract_files(int fd, struct swupdate_cfg *software)
@@ -182,7 +198,7 @@ index 85d13fda..18a533af 100644
  				}
  			}
 diff --git a/core/util.c b/core/util.c
-index 2534da31..fc1bb2be 100644
+index 2534da3..fc1bb2b 100644
 --- a/core/util.c
 +++ b/core/util.c
 @@ -684,10 +684,22 @@ bool strtobool(const char *s)
@@ -210,7 +226,7 @@ index 2534da31..fc1bb2be 100644
  	int iovlen = 8;
  	struct iovec iov[iovlen];
 diff --git a/include/installer.h b/include/installer.h
-index 21b3d9f6..ca7e4c8f 100644
+index 21b3d9f..ca7e4c8 100644
 --- a/include/installer.h
 +++ b/include/installer.h
 @@ -23,5 +23,6 @@ int postupdate(struct swupdate_cfg *swcfg, const char *info);
@@ -221,7 +237,7 @@ index 21b3d9f6..ca7e4c8f 100644
  int update_installed_image_version(struct swver *sw_ver_list,
  		struct img_type *img);
 diff --git a/mongoose/Makefile b/mongoose/Makefile
-index 691b29c4..27ce93eb 100644
+index 691b29c..27ce93e 100644
 --- a/mongoose/Makefile
 +++ b/mongoose/Makefile
 @@ -9,7 +9,7 @@ KBUILD_CFLAGS += -DMG_ENABLE_EPOLL=1
@@ -234,7 +250,7 @@ index 691b29c4..27ce93eb 100644
  KBUILD_CFLAGS += -DMG_ENABLE_IPV6=1
  endif
 diff --git a/mongoose/mongoose_interface.c b/mongoose/mongoose_interface.c
-index 729862e6..a53a8b3c 100644
+index 729862e..a53a8b3 100644
 --- a/mongoose/mongoose_interface.c
 +++ b/mongoose/mongoose_interface.c
 @@ -363,6 +363,70 @@ static void restart_handler(struct mg_connection *nc, void *ev_data)
@@ -318,7 +334,7 @@ index 729862e6..a53a8b3c 100644
  			nc->pfn = upload_handler;
  			nc->pfn_data = NULL;
 diff --git a/parser/parser.c b/parser/parser.c
-index 84bf036c..6ce293bf 100644
+index 84bf036..6ce293b 100644
 --- a/parser/parser.c
 +++ b/parser/parser.c
 @@ -302,8 +302,15 @@ static int parse_hw_compatibility(parsertype p, void *cfg, struct swupdate_cfg *
@@ -339,3 +355,6 @@ index 84bf036c..6ce293bf 100644
  	}
  
  	count = get_array_length(p, setting);
+-- 
+2.55.0
+

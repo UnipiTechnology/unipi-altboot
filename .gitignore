@@ -9,3 +9,8 @@ uboot.env
 boot.cmd
 boot.scr
 debian/changelog
+
+# Fetched upstream sources
+busybox/
+swupdate/
+ttyd/

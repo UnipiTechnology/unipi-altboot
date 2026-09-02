@@ -85,19 +85,16 @@ clean:
 	-@cd webapp && [ -r Makefile ] &&  make clean
 
 $(SWUPDATE): 
-	@test -e swupdate/.git || { echo "Git submodule swupdate is not initialized" >&2; exit 1; }
+	@test -d swupdate || { echo "swupdate source is not fetched (run ./prepare.sh build)" >&2; exit 1; }
 	@cp swupdate.config swupdate/.config
-	@cd swupdate; [ -f .patch.applied ] || ( patch -p 1 <../swupdate.patch && touch .patch.applied )
-	@#cd swupdate; [ -f .patch2.applied ] || ( patch -p 1 <../swupdate-hw.patch && touch .patch2.applied )
-	@cd swupdate; if [ "$${PRODUCT}" = "g1" ]; then patch -p 1 <../swupdate-g1.patch; fi
 	@( cd swupdate; make scripts_basic; make -j 4 )
 
 $(TTYD):
-	@test -e ttyd/.git || { echo "Git submodule ttyd is not initialized" >&2; exit 1; }
+	@test -d ttyd || { echo "ttyd source is not fetched (run ./prepare.sh build)" >&2; exit 1; }
 	@set -e; cd ttyd; mkdir -p build; cd build; cmake ..; make
 
 $(BUSYBOX):
-	@test -e busybox/.git || { echo "Git submodule busybox is not initialized" >&2; exit 1; }
+	@test -d busybox || { echo "busybox source is not fetched (run ./prepare.sh build)" >&2; exit 1; }
 	@cp busybox.config busybox/configs/altboot_defconfig
 	@set -e; cd busybox; make altboot_defconfig; make -j 4
 

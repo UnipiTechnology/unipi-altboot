@@ -26,6 +26,8 @@ if [ -z "$HWPROC" ]; then
     if [ -r /proc/device-tree/compatible ] && grep -q bcm2711 /proc/device-tree/compatible; then
         export IS_RPI=1
         export IS_CM40=1
+    elif [ -r /proc/device-tree/compatible ] && grep -q 'rockchip,rk3328' /proc/device-tree/compatible; then
+        export IS_G1=1
     elif [ -r /sys/devices/soc0/soc_id ] && grep -q "i.MX8MM" /sys/devices/soc0/soc_id; then
         export IS_ZULU=1
     fi

@@ -1,5 +1,14 @@
+From bbd23d81478b777b8dfc2790de0844251e269f96 Mon Sep 17 00:00:00 2001
+From: Miroslav Ondra <ondra@faster.cz>
+Date: Thu, 27 Aug 2026 11:07:57 +0200
+Subject: [2/2] Skip rockchip bootloader artifacts
+
+---
+ core/installer.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
 diff --git a/core/installer.c b/core/installer.c
-index ba55a950..9604d4b0 100644
+index ba55a95..9604d4b 100644
 --- a/core/installer.c
 +++ b/core/installer.c
 @@ -49,6 +49,11 @@ swupdate_file_t check_if_required(struct imglist *list, struct filehdr *pfdh,
@@ -14,3 +23,6 @@ index ba55a950..9604d4b0 100644
  	/*
  	 * Check that not more than one image want to be streamed
  	 */
+-- 
+2.55.0
+

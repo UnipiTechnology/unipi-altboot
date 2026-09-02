@@ -22,7 +22,7 @@ if [ ! -d /opt/swupdate ]; then
 
     . /scripts/functions
     wait_for_udev 10
-	# generating ssl key before hw check to wait for usb eth
+    # generating ssl key before hw check to wait for usb eth
     openssl req -x509 -newkey rsa:4096 -keyout /etc/key.pem -out /etc/cert.pem -sha256 -days 3650 -nodes -subj "/CN=192.168.200.200"
     . /scripts/init-premount/hwcheck.sh.in
 
@@ -87,7 +87,10 @@ EOF
     MD5=$(printf "$AUTH_USER:$AUTH_DOMAIN:$AUTH_PASS" | md5sum -t | cut -d\  -f 1)
     printf "$AUTH_USER:$AUTH_DOMAIN:$MD5\n" > /etc/htdigest
 
-	echo 'printf "You can use this terminal to manage your device or follow these link for graphical interface:\n"' > /etc/profile
+    cat >/etc/profile <<EOF
+printf "You can use this terminal to manage your device or follow these link for graphical interface:\n"
+alias reboot="reboot -f"
+EOF
 
     ip ad ls | sed -n 's#^.*inet \+\([^/]\+\)/.*$#\1#p' | while read ip; do
         if [ "$ip" != "127.0.0.1" ]; then
@@ -95,7 +98,7 @@ EOF
         fi
     done >> /etc/profile
 
-    /opt/swu/ttyd -p 443 -S -C /etc/cert.pem -K /etc/key.pem -W "${TTY_SH}" &
+    /opt/swu/ttyd -p 443 -6 -S -C /etc/cert.pem -K /etc/key.pem -W "${TTY_SH}" &
     nft add table ip nat
     nft add chain ip nat prerouting { type nat hook prerouting priority -100 \; }
     nft add rule ip nat prerouting tcp dport 80 redirect to 443
